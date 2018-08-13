@@ -1,0 +1,110 @@
+<application>
+<name>kinStructureLearning datadumper icubSim</name>
+<dependencies>
+</dependencies>
+    <!--Modules-->
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/head</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/torso</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/leftArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/rightArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/left --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/right --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/joints_kSL</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/eePose</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <!--Connections-->
+    <connection>
+        <from>/icubSim/head/state:o</from>
+        <to>/data/head</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/torso/state:o</from>
+        <to>/data/torso</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/left_arm/state:o</from>
+        <to>/data/leftArm</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/right_arm/state:o</from>
+        <to>/data/rightArm</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/cam/left</from>
+        <to>/data/images/left</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/cam/right</from>
+        <to>/data/images/right</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/kinStructureLearning/dumper_joints:o</from>
+        <to>/data/joints_kSL</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/motorBabbling/eePose:o</from>
+        <to>/data/eePose</to>
+        <protocol>udp</protocol>
+    </connection>
+</application>

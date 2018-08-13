@@ -1,0 +1,170 @@
+<application>
+<name>kinStructureLearning datadumper icub</name>
+<dependencies>
+</dependencies>
+    <!--Modules-->
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/head</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/rightArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <!--Calibrated camera-->
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/calib/left --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/calib/right --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/joints_kSL</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/torso</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/leftArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <!--Uncalibrated camera-->
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/left --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/right --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/imuFilter/inertial</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/imuFilter/bias</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/reachBallDemo/target</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+
+    
+    <!--Connections-->
+    <connection>
+        <from>/icub/head/state:o</from>
+        <to>/data/head</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icub/torso/state:o</from>
+        <to>/data/torso</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icub/left_arm/state:o</from>
+        <to>/data/leftArm</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icub/right_arm/state:o</from>
+        <to>/data/rightArm</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <!--Uncalibrated camera connections-->
+    <connection>
+        <from>/icub/cam/left</from>
+        <to>/data/images/left</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icub/cam/right</from>
+        <to>/data/images/right</to>
+        <protocol>udp</protocol>
+    </connection>
+    <!--Calibrated camera connections-->
+    <connection>
+        <from>/icub/camcalib/left/out</from>
+        <to>/data/images/calib/left</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icub/camcalib/right/out</from>
+        <to>/data/images/calib/right</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/imuFilter/inertial:o</from>
+        <to>/data/imuFilter/inertial</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/imuFilter/bias:o</from>
+        <to>/data/imuFilter/bias</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/kinStructureLearning/dumper_joints:o</from>
+        <to>/data/joints_kSL</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/reachBallDemo/targetDumpedData:o</from>
+        <to>/data/reachBallDemo/target</to>
+        <protocol>udp</protocol>
+    </connection>
+</application>
