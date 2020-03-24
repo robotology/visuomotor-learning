@@ -13,7 +13,8 @@ Repository for learning visuo-motor mapping and visual-tactile-proprioceptive in
 to connect to `motorBabbling` command service. There, with `help` you can explore the possibility to control the babbling behaviours of iCub/iCub_SIM.
 - To babbling with object, for example, using:
 	```
-	auto_obj_babble_arm right 2 3 #right for the right-arm, 2 for 2 different objects, and 3 for 3 repeats for each object
+	auto_obj_babble_arm right 2 3 
+	#right for the right-arm, 2 for 2 different objects, and 3 for 3 repeats for each object
 	```
 	
 - Abstracted skin events can be read from this port `/skinEventsAggregator/skin_events_aggreg:o`. Output is in following format:
@@ -25,16 +26,18 @@ or
 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 (4 r_hand 101) ()
 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 (4 r_hand 118) ()
 ```
-with the integer number in `( )` represents the taxel number, e.g. `101`, `118` or `291`, `303`, in the corresponding body part, e.g. `r_hand` or `r_forearm`. The first table or 33 columns (for 33 taxel in simulation) uses `1.0` to represent the activated taxel. The order of taxel are as follows:
+with the integer number in `( )` represents the taxel number, e.g. `101`, `118` or `291`, `303`, in the corresponding body part, e.g. `r_hand` or `r_forearm`. The first table or 33 columns (for 33 taxel in simulation) uses `1.0` to represent the activated taxel. 
 
-	1. Forearm
-		a. Lower patch (16 taxels): 3 15 27 39 51 63 75 87 99 111 123 135 147 159 171 183 
-        b. Upper patch 
-        	- (7 taxels - icubSim) : 207 255 291 303 315 339 351
-        	- (8 taxels - icub)    : 195 207 231 267 291 303 339 351
-  	2. Hand (the first 5 taxels are of fingers):
-		a. Left: 3 15 27 39 51 99 101 109 122 134
-		b. Right: 3 15 27 39 51 101 103 118 137 124
+### The order of taxel are as follows:
+
+1. Forearm
+	a. Lower patch (16 taxels): 3 15 27 39 51 63 75 87 99 111 123 135 147 159 171 183 
+    b. Upper patch 
+    	- (7 taxels - icubSim) : 207 255 291 303 315 339 351
+    	- (8 taxels - icub)    : 195 207 231 267 291 303 339 351
+2. Hand (the first 5 taxels are of fingers):
+	a. Left: 3 15 27 39 51 99 101 109 122 134
+	b. Right: 3 15 27 39 51 101 103 118 137 124
 
 
 ## Related publications
