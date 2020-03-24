@@ -11,7 +11,7 @@ Repository for learning visuo-motor mapping and visual-tactile-proprioceptive in
 	yarp rpc /motorBabbling/rpc
 	```
 to connect to `motorBabbling` command service. There, with `help` you can explore the possibility to control the babbling behaviours of iCub/iCub_SIM.
-	- To babbling with object, for example, using:
+- To babbling with object, for example, using:
 	```
 	auto_obj_babble_arm right 2 3 #right for the right-arm, 2 for 2 different objects, and 3 for 3 repeats for each object
 	```
