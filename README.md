@@ -26,7 +26,7 @@ or
 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 (4 r_hand 101) ()
 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 (4 r_hand 118) ()
 ```
-with the integer number in `( )` represents the taxel number, e.g. `101`, `118` or `291`, `303`, in the corresponding body part, e.g. `r_hand` or `r_forearm`. The first table or 33 columns (for 33 taxel in simulation) uses `1.0` to represent the activated taxel. 
+with the integer number in `( )` represents the taxel number, e.g. `101`, `118` or `291`, `303`, in the corresponding body part, e.g. `r_hand` or `r_forearm`. The first table of 33 columns (for 33 taxel in simulation) uses `1.0` to represent the activated taxel. 
 
 ### The order of taxel are as follows:
 
