@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 
     ResourceFinder rf;
     rf.setVerbose(true);
-    rf.setDefaultContext("visuomotor-learning");
+    rf.setDefaultContext("kinStructureLearning");
     rf.setDefaultConfigFile("motorBabbling.ini");
     rf.configure(argc,argv);
 

@@ -113,6 +113,23 @@ service motorBabbling_IDL
   double get_freq();
 
   /**
+  * Start babbling with an arm automatically in number of times
+  * @param armName: string value for arm
+  * @param _nbRepeatObj: integer value for number of time generating objects
+  * @param _nbRepeat: integer value for number of times
+  * @return true/false on success/failure.
+  */
+  bool auto_obj_babble_arm(1:string armName, 2:i32 _nbRepeatObj, 3:i32 _nbRepeat);
+
+  /**
+  * Start babbling with an arm automatically in number of times
+  * @param armName: string value for arm
+  * @param _nbRepeatObj: integer value for number of time generating objects
+  * @return true/false on success/failure.
+  */
+  bool auto_obj_only(1:string armName, 2:i32 _nbRepeatObj);
+
+  /**
   * Resume the current babbling action after stop()
   * @return true/false on success/failure.
   **/

@@ -4,6 +4,16 @@ using namespace std;
 using namespace yarp::os;
 using namespace yarp::sig;
 
+// TODO:
+// - add mode babbling-with-object
+// - add number of time babbling-with-object
+// - generate objects randomly (1) position, (2) size, (3) color, (4) shape. For each object, do following N times:
+//  + look at object with random head configuration
+//  + capture stereo-images: read images and dump once
+//  + move arm randomly toward object, stop if collision happen
+//  + collect data: head encoders, arm encoders, tactile (activation taxels, skin part)-read from "skinEventAggregation" (local change version)
+
+
 double genRandom()
 {
     return static_cast <double> (rand()) / static_cast <double> (RAND_MAX);    // random double number in <0.0 1.0>
@@ -19,6 +29,7 @@ bool motorBabbling::configure(yarp::os::ResourceFinder &rf) {
     single_joint = rf.check("single_joint", Value(-1)).asInt();
 
     eePoseOutPort.open(("/"+name+"/eePose:o").c_str());
+    objPoseDimOutPort.open(("/"+name+"/objPoseDim:o").c_str());
 
     Bottle &start_pos = rf.findGroup("start_position");
     Bottle *b_start_commandHead = start_pos.find("head").asList();
@@ -30,7 +41,7 @@ bool motorBabbling::configure(yarp::os::ResourceFinder &rf) {
     new_command_head.resize(3, 0.0);
     if ((b_start_commandHead->isNull()) || (b_start_commandHead->size() < 3)) {
         yWarning("[%s] Something is wrong in ini file. Default value is used",name.c_str());
-        start_command_head[0] = -20.0;  // -30 in motorBabbling.ini ==> azimuth angle <-55.0 55.0>  // old -25
+        start_command_head[0] = 20.0;  // -30 in motorBabbling.ini ==> azimuth angle <-55.0 55.0>  // old -25
         start_command_head[1] = -20.0;  // -20 in motorBabbling.ini ==> elevation angle <-40.0 30.0>    //old -25
         start_command_head[2] = +10.0;  // ==> vergence angle
     } else {
@@ -45,6 +56,70 @@ bool motorBabbling::configure(yarp::os::ResourceFinder &rf) {
     nbRepeat = 0;
     isBabbling = false;
     moveHeadOnly = false;
+
+    // babbling with object mode
+    nbRepeatObjGen = 0;
+    babbling_with_obj = false;
+
+    generateObjRandom_only = false;
+
+    // camera port
+    imagePortInR = new BufferedPort<ImageOf<PixelRgb>>;
+    imagePortInL = new BufferedPort<ImageOf<PixelRgb>>;
+
+    imagePortInR->open(("/"+name+"/imageR:i").c_str());
+    imagePortInL->open(("/"+name+"/imageL:i").c_str());
+    imagePortOutR.open(("/"+name+"/imageR:o").c_str());
+    imagePortOutL.open(("/"+name+"/imageL:o").c_str());
+
+
+    if (robot=="icubSim")
+    {
+        if (yarp::os::Network::connect("/icubSim/cam/left",imagePortInL->getName().c_str()))
+            yDebug("left image connected!");
+        else
+            yError("left image cannot connect!");
+        if (yarp::os::Network::connect("/icubSim/cam/right",imagePortInR->getName().c_str()))
+            yDebug("right image connected!");
+        else
+            yError("right image cannot connect!");
+
+        string port2icubsim = "/" + name + "/sim:o";
+        //cout<<port2icubsim<<endl;
+        if (!portToSimWorld.open(port2icubsim.c_str())) {
+            yError("Unable to open port << port2icubsim << endl");
+        }
+        std::string port2world = "/icubSim/world";
+        yarp::os::Network::connect(port2icubsim, port2world.c_str());
+
+        Time::delay(0.5);
+
+        Matrix T_world_root(4,4);
+
+        T_world_root(0,1)=-1;
+        T_world_root(1,2)=1; T_world_root(1,3)=0.5976;
+        T_world_root(2,0)=-1; T_world_root(2,3)=-0.026;
+        T_world_root(3,3)=1;
+        T_root_world=yarp::math::SE3inv(T_world_root);
+
+        cleanWorld();
+    }
+    else
+    {
+        if (yarp::os::Network::connect("/icub/camcalib/left/out",imagePortInL->getName().c_str()))
+            yDebug("left image connected!");
+        else
+            yError("left image cannot connect!");
+        if (yarp::os::Network::connect("/icub/camcalib/right/out",imagePortInR->getName().c_str()))
+            yDebug("right image connected!");
+        else
+            yError("right image cannot connect!");
+    }
+    genObjPos.resize(3,0.0);
+
+    // head encoders
+    headEncPortOut.open(("/"+name+"/headEncs:o").c_str());
+
 
     if ((b_start_command->isNull()) || (b_start_command->size() < 16))
     {
@@ -115,6 +190,10 @@ bool motorBabbling::configure(yarp::os::ResourceFinder &rf) {
 bool    motorBabbling::interruptModule()
 {
     rpcPort.interrupt();
+    imagePortInL->interrupt();
+    imagePortInR->interrupt();
+    imagePortOutL.interrupt();
+    imagePortOutR.interrupt();
     yInfo() << "Bye!";
     return true;
 }
@@ -125,12 +204,23 @@ bool    motorBabbling::close()
 
     leftArmDev.close();
     rightArmDev.close();
-    headDev.close();
+    headCartDev.close();
     leftArmDev.close();
     rightArmDev.close();
 
-    rpcPort.interrupt();
+    yInfo() << "close rpcPort";
     rpcPort.close();
+    yInfo() << "close input image ports";
+    imagePortInL->close();
+    imagePortInR->close();
+
+    yInfo() << "close output image ports";
+    imagePortOutL.close();
+    imagePortOutR.close();
+
+    yInfo() << "delete input image ports";
+    delete imagePortInL;
+    delete imagePortInR;
 
     yInfo() << "Bye!";
 
@@ -141,75 +231,137 @@ bool    motorBabbling::updateModule()
 {
     // TODO: use interruptBabbling
     ts.update();
-    if (isBabbling) //isBabbling set by sending rpc command "babbling_<part>"
-    {
-        if (Time::now()< startBabblingTime + duration)
-        {
-            double t = Time::now() - startBabblingTime;
-            moveHeadRandomly();
-            if (!moveHeadOnly)
-                babblingCommands(t, single_joint);  // Comment for testing
-            Vector x_cur(3,0.0), o_cur(4,0.0);
-            iCartCtrl->getPose(x_cur,o_cur);
-            yInfo("current pos: %s",x_cur.toString(3,3).c_str());
+    switch (operation_mode) {
+    case OBJ_MODE:
+        cleanWorld();
+        home_all();
+        Time::delay(1.);
+        generateObjRandom(autoArmName,genObjPos);
 
-            Bottle& output = eePoseOutPort.prepare();
-            output.clear();
-            for (int8_t i=0;i<x_cur.size();i++)
-                output.addDouble(x_cur[i]);
-            eePoseOutPort.setEnvelope(ts);
-            eePoseOutPort.write();
-        }
-        else
+        moveHeadToStartPos(true);
+        operation_mode = IDLE_MODE;
+        generateObjRandom_only = false;
+        posArm->stop();
+        posHead->stop();
+        break;
+
+//    default:
+//        break;
+//    }
+//    if (generateObjRandom_only)
+//    {
+////        cleanWorld();
+//        home_all();
+//        Time::delay(1.);
+//        generateObjRandom(autoArmName,genObjPos);
+//        generateObjRandom_only = false;
+//    }
+//    else
+//    {
+    case MOV_MODE:
+//        cleanWorld();
+        if (isBabbling) //isBabbling set by sending rpc command "babbling_<part>"
         {
-            yDebug("[%s] ============> babbling with COMMAND is FINISHED",name.c_str());
-            isBabbling = false; // isBabbling uset when the time is over the duration
-            if (curRepeat>=nbRepeat)
-                moveHeadOnly = false;
-            igaze->stopControl();
-            velLeftArm->stop();
-            velRightArm->stop();
-        }
-    }
-    else
-    {
-        if(curRepeat<nbRepeat)
-        {
-            if(moveHeadOnly)
+            if (Time::now()< startBabblingTime + duration)
             {
-                if(babble_head(autoArmName))
-                {
-                    curRepeat++;
-                    moveHeadOnly = true;
-                    yInfo("[%s] Finish %d time babbling the head in the %s side",
-                        name.c_str(), curRepeat, autoArmName.c_str());
-                }
-                else
-                    yError("[%s] Error running %d time babbling the head in the %s side",
-                        name.c_str(), curRepeat, autoArmName.c_str());
+                double t = Time::now() - startBabblingTime;
+    //            yInfo() << "t = " << t << "/ " << duration;
+                if (!babbling_with_obj)
+                    moveHeadRandomly();
+                if (!moveHeadOnly)
+                    babblingCommands(t, single_joint);  // Comment for testing
+                Vector x_cur(3,0.0), o_cur(4,0.0);
+                iCartCtrl->getPose(x_cur,o_cur);
+    //            yInfo("current pos: %s",x_cur.toString(3,3).c_str());
+
+                Bottle& output = eePoseOutPort.prepare();
+                output.clear();
+    //            for (int8_t i=0;i<x_cur.size();i++)
+    //                output.addDouble(x_cur[i]);
+                addVectorToBottle(x_cur,output);
+                eePoseOutPort.setEnvelope(ts);
+                eePoseOutPort.write();
             }
             else
-                if(babble_arm(autoArmName))
-                {
-                    curRepeat++;
-                    yInfo("[%s] Finish %d time babbling the %s arm",
-                        name.c_str(), curRepeat, autoArmName.c_str());
-                    Vector x_cur(3,0.0), o_cur(4,0.0);
-                    iCartCtrl->getPose(x_cur,o_cur);
-                    yInfo("current pos: %s",x_cur.toString(3,3).c_str());
-
-                    Bottle& output = eePoseOutPort.prepare();
-                    output.clear();
-                    for (int8_t i=0;i<x_cur.size();i++)
-                        output.addDouble(x_cur[i]);
-                    eePoseOutPort.write();
-                }
-                else
-                    yError("[%s] Error running %d time babbling the %s arm",
-                        name.c_str(), curRepeat, autoArmName.c_str());
+            {
+                yDebug("[%s] ============> babbling with COMMAND is FINISHED",name.c_str());
+                isBabbling = false; // isBabbling uset when the time is over the duration
+                if (curRepeat>=nbRepeat)
+                    moveHeadOnly = false;
+                igaze->stopControl();
+                velLeftArm->stop();
+                velRightArm->stop();
+            }
         }
         else
-            nbRepeat = 0;
+        {
+            if(curRepeat<nbRepeat)
+            {
+                if(moveHeadOnly)
+                {
+                    if(babble_head(autoArmName))
+                    {
+                        curRepeat++;
+                        moveHeadOnly = true;
+                        yInfo("[%s] Finish %d time babbling the head in the %s side",
+                            name.c_str(), curRepeat, autoArmName.c_str());
+                    }
+                    else
+                        yError("[%s] Error running %d time babbling the head in the %s side",
+                            name.c_str(), curRepeat, autoArmName.c_str());
+                }
+                else
+                {
+                    if (babbling_with_obj && curRepeatObjGen<nbRepeatObjGen && curRepeat==0)
+                    {
+                        home_all();
+                        Time::delay(.5);
+                        if (generateObjRandom(autoArmName,genObjPos))
+                            curRepeatObjGen++;
+                    }
+
+                    if(babble_arm(autoArmName))
+                    {
+                        curRepeat++;
+                        yInfo("[%s] Finish %d time babbling the %s arm",
+                            name.c_str(), curRepeat, autoArmName.c_str());
+                        Vector x_cur(3,0.0), o_cur(4,0.0);
+                        iCartCtrl->getPose(x_cur,o_cur);
+                        yInfo("current pos: %s",x_cur.toString(3,3).c_str());
+
+                        Bottle& output = eePoseOutPort.prepare();
+                        output.clear();
+                        for (int8_t i=0;i<x_cur.size();i++)
+                            output.addDouble(x_cur[i]);
+                        eePoseOutPort.write();
+                    }
+                    else
+                        yError("[%s] Error running %d time babbling the %s arm",
+                            name.c_str(), curRepeat, autoArmName.c_str());
+                }
+            }
+            else
+            {
+                if (!babbling_with_obj || curRepeatObjGen==nbRepeatObjGen)
+                {
+                    nbRepeat = 0;
+                    operation_mode = IDLE_MODE;
+                }
+                if (babbling_with_obj && curRepeatObjGen==nbRepeatObjGen)
+                {
+                    babbling_with_obj = false;
+                    operation_mode = IDLE_MODE;
+                }
+                curRepeat = 0;
+                cleanWorld();
+//                operation_mode = IDLE_MODE;
+            }
+        }
+        break;
+
+    default:
+        operation_mode = IDLE_MODE;
+        break;
     }
     return true;
 }
@@ -325,12 +477,19 @@ bool    motorBabbling::initArm(const std::string &armName, yarp::dev::PolyDriver
 
 bool    motorBabbling::initRobot()
 {
+//    if(!initArm("left_arm", leftArmDev))
+//        return false;
+//    if(!initArm("right_arm", rightArmDev))
+//        return false;
+
     if(!init_left_arm())
         return false;
     if(!init_right_arm())
         return false;
 
     yInfo("[%s] Arms initialized.",name.c_str());
+    if(!init_head())
+        return false;
 
     /* Init. head */
     Property option_head;
@@ -339,13 +498,13 @@ bool    motorBabbling::initRobot()
     option_head.put("remote", "/iKinGazeCtrl");
     option_head.put("local", ("/"+ name+"/gaze").c_str());
 
-    if (!headDev.open(option_head)) {
+    if (!headCartDev.open(option_head)) {
         yError("[%s] Device not available.  Here are the known devices:",name.c_str());
         yError() << yarp::dev::Drivers::factory().toString();
         return false;
     }
 
-    headDev.view(igaze);
+    headCartDev.view(igaze);
     yInfo("[%s] Head initialized.",name.c_str());
 
     igaze->getNeckYawRange(&neck_range_min[0], &neck_range_max[0]);     // yaw ~ azimuth
@@ -355,6 +514,40 @@ bool    motorBabbling::initRobot()
     for (int8_t i=0; i<3; i++)
         yInfo("[%s] neck range of joint %d: [%3.3f, %3.3f]",
               name.c_str(), i, neck_range_min[i], neck_range_max[i]);
+
+    // Torso controller
+    yarp::os::Property OptT;
+    OptT.put("robot",  robot);
+    OptT.put("part",   "torso");
+    OptT.put("device", "remote_controlboard");
+    OptT.put("remote", "/"+robot+"/torso");
+    OptT.put("local",  "/"+name +"/torso");
+    if (!torsoDev.open(OptT))
+    {
+        yError("[%s]Could not open torso PolyDriver!",name.c_str());
+        return false;
+    }
+
+    bool okT = 1;
+
+    if (torsoDev.isValid())
+    {
+        okT = okT && torsoDev.view(encsTorso);
+        okT = okT && torsoDev.view(velTorso);
+        okT = okT && torsoDev.view(posTorso);
+        okT = okT && torsoDev.view(iCtrlTorso);
+        okT = okT && torsoDev.view(iCtrlLimTorso);
+
+    }
+    int jntsT;
+    encsTorso->getAxes(&jntsT);
+    encodersTorso.resize(jntsT);
+
+    if (!okT)
+    {
+        yError("[%s]Problems acquiring torso interfaces!!!!",name.c_str());
+        return false;
+    }
 
     /* Init. cartesian controller for left arm */
     Property optionL("(device cartesiancontrollerclient)");
@@ -392,14 +585,43 @@ bool    motorBabbling::moveHeadToStartPos(bool ranPos=true)
 {
     Vector ang = start_command_head;
     double r;
-    if (ranPos)
-        for (int8_t i=0; i<2;i++)
-        {
-            r = genRandom();
-            ang[i] += (start_command_head[i]-neck_range_min[i])*(2.0*r-1.0);
+
+    // obtain random angle of neck around object --> this to ensure object is inside the view
+    yDebug("genObjPos = %s", genObjPos.toString(3,3).c_str());
+    if (babbling_with_obj || generateObjRandom_only)
+    {
+        Vector tempPos = genObjPos;
+        do{
+            for (int8_t i=0; i<3;i++)
+            {
+                tempPos[i] = genObjPos[i] + 0.15*(2.*genRandom() - 1.);
+            }
+            tempPos[0] = min(-0.2,tempPos[0.0]);
+            yDebug("tempPos = %s", tempPos.toString(3,3).c_str());
+
+            igaze->getAnglesFrom3DPoint(tempPos, ang);
+            yDebug("ang = %s", ang.toString(3,3).c_str());
         }
-    if (part == "right")
-        ang[0] = -ang[0];
+        while(ang[0]>55. || (ang[0]<0 && part=="right") || ang[0]<-55. || (ang[0]>0 && part=="left")
+              || ang[1]<-55. || ang[1]>30. );
+        yInfo("ang = %s", ang.toString(3,3).c_str());
+    }
+    else
+    {
+        if (ranPos)
+            for (int8_t i=0; i<2;i++)
+            {
+                r = genRandom();
+    //            ang[i] += (20.0-i*5.0)*(2.0*r-1.0);
+    //            ang[i] += (30.0-i*5.0)*(2.0*r-1.0); // azimuth <-50 ~ 10>, elevation <-35 ~ 15>
+                ang[i] += (start_command_head[i]-neck_range_min[i])*(2.0*r-1.0); // For collecting data
+    //            ang[i] += 5.0*(2.0*r-1.0);  // For testing
+    //            ang[i] = (5.0-neck_range_min[i])*r;
+            }
+        if (part == "left")
+            ang[0] = -ang[0];
+    }
+
     new_command_head = ang;
     yInfo("[%s] new generated head gazing angles [%s]",name.c_str(),new_command_head.toString(3,3).c_str());
 
@@ -415,9 +637,11 @@ bool    motorBabbling::moveHeadRandomly()
     for (int8_t i=0; i<2;i++)
     {
         r = genRandom();
+//        double ampH;
         ang[i] += ampH*(2.0*r-1.0);
     }
 
+//    yInfo("[%s] new generated head gazing angles [%s]",name.c_str(),ang.toString(3,3).c_str());
     return igaze->lookAtAbsAngles(ang);
 }
 
@@ -449,6 +673,18 @@ bool    motorBabbling::moveHeadToCentralPos()
     return ok;
 }
 
+bool    motorBabbling::moveTorsoToHome()
+{
+    Vector targetTorso(3,0.0);
+    posTorso->positionMove(targetTorso.data());
+    bool doneTorso=false;
+    double t0=yarp::os::Time::now();
+    while (!doneTorso && (yarp::os::Time::now()-t0<5.0))
+    {
+        posTorso->checkMotionDone(&doneTorso);
+        yarp::os::Time::delay(0.1);
+    }
+}
 
 bool    motorBabbling::moveArmAway(const string &partName)
 {
@@ -513,10 +749,12 @@ bool    motorBabbling::moveArmToStartPos(const string &partName, bool home = fal
         R(1,1)=1.0;
     }
     Vector od= yarp::math::dcm2axis(R);
+//    Vector od(4,0.0);
     Vector xd, xdhat,odhat, qdhat;
+//    if (fixatePos[0]<-0.4) fixatePos[0] = -0.4;
 
     iCartCtrl->askForPose(fixatePos,od,xdhat,odhat,qdhat);
-    yInfo("[%s] joint command from Cartesian Controller: %s",name.c_str(), qdhat.subVector(3,9).toString(3,3).c_str());
+//    yInfo("[%s] joint command from Cartesian Controller: %s",name.c_str(), qdhat.subVector(3,9).toString(3,3).c_str());
     for (int i = 0; i < 16; i++)
     {
         iCtrlArm->setControlMode(i, VOCAB_CM_POSITION);
@@ -524,9 +762,16 @@ bool    motorBabbling::moveArmToStartPos(const string &partName, bool home = fal
         if (i<=6)
             new_command_arm[i] = qdhat[i+3]+5.0*(2.0*genRandom()-1.0);    // qdhat including 3 torso joints
         else
+        {
             new_command_arm[i] = start_command_arm[i];
+        }
     }
     yInfo("[%s] final joint command with init hand joints: %s",name.c_str(), new_command_arm.toString(3,3).c_str());
+    if (babbling_with_obj || generateObjRandom_only)
+        command[1] = 90.;
+//    new_command_arm = command;
+    Vector velArmHand(16, 20.0);
+    posArm->setRefSpeeds(velArmHand.data());
     if (home)
         posArm->positionMove(command.data());
     else
@@ -540,7 +785,54 @@ bool    motorBabbling::gotoStartPos(bool moveAway=false)
     velLeftArm->stop();
     velRightArm->stop();
 
+//    yarp::os::Time::delay(2.0);
+    if (babbling_with_obj)
+    {
+        home_arms();
+        Time::delay(1.);
+    }
     moveHeadToStartPos();
+
+    if (babbling_with_obj)
+    {
+        Time::delay(2.);
+        // TODO: Take images and head encoders here: --> implicitly 3D information of object
+        yDebug("read images");
+        imageInR = imagePortInR->read(false);
+        imageInL = imagePortInL->read(false);
+
+        imagePortOutR.setEnvelope(ts);
+        imagePortOutL.setEnvelope(ts);
+        ImageOf<PixelRgb> imgOutR, imgOutL;
+        yDebug("copy images");
+        if (imageInL!=NULL)
+        {
+            imgOutR.copy(*imageInR);
+            yDebug("copy right images");
+        }
+
+        if (imageInL!=NULL)
+        {
+            imgOutL.copy(*imageInL);
+            yDebug("copy left images");
+        }
+
+        yDebug("write images");
+        imagePortOutR.write(imgOutR);
+        imagePortOutL.write(imgOutL);
+
+        while (!encsHead->getEncoders(encodersHead.data()));
+        {
+            Time::delay(0.05);
+        }
+        yInfo("[%s] Head encoders: %s",name.c_str(), encodersHead.toString(3,3).c_str());
+        Bottle& output = headEncPortOut.prepare();
+        output.clear();
+        addVectorToBottle(encodersHead,output);
+        headEncPortOut.setEnvelope(ts);
+        headEncPortOut.write();
+
+    }
 
     /* Move arm to start position */
     if (part == "left" || part == "right")
@@ -551,6 +843,7 @@ bool    motorBabbling::gotoStartPos(bool moveAway=false)
             moveArmToStartPos(part);
         bool done_head = false;
         bool done_arm = false;
+        double t0 = Time::now();
         while (!done_head || !done_arm)
         {
             igaze->checkMotionDone(&done_head);
@@ -559,10 +852,13 @@ bool    motorBabbling::gotoStartPos(bool moveAway=false)
             else
                 posRightArm->checkMotionDone(&done_arm);
 
+            if (babbling_with_obj && (Time::now()-t0>5.))
+                done_arm = true;
             Time::delay(0.04);
         }
         yInfo() << "Done.";
 
+//        Time::delay(1.0);
     }
     else
     {
@@ -585,9 +881,11 @@ void    motorBabbling::babblingCommands(const double &t, int j_idx)
 
     for (unsigned int l = 0; l < 16; l++)
     {
+//        ref_command[l] = start_command_arm[l] + amp * sin(freq * t * 2 * M_PI);
         double r1 = genRandom();
         double r2 = genRandom();
         ref_command[l] = new_command_arm[l] + (2.0*r1-1.0)*amp * sin(freq*(2.0*r2-1.0) * t * 2 * M_PI);
+//        ref_command[l] = new_command_arm[l] + r1*amp * sin(freq*(2.0*r2-1.0) * t * 2 * M_PI);
         ref_command[l] = std::max(minLimArm[l],ref_command[l]);
         ref_command[l] = std::min(maxLimArm[l],ref_command[l]);
     }
@@ -627,7 +925,17 @@ void    motorBabbling::babblingCommands(const double &t, int j_idx)
         }
         else
         {
-            int8_t lMin, lMax, vMax = 20;
+            int8_t lMin, lMax, vMax, K;
+            if (robot=="icubSim")
+            {
+                vMax = 30;
+                K = 15;
+            }
+            else
+            {
+                vMax = 20;
+                K = 10;
+            }
             if (part_babbling == "arm")
             {
                 lMin = 0;   lMax = 7;
@@ -651,7 +959,7 @@ void    motorBabbling::babblingCommands(const double &t, int j_idx)
             {
                 for (unsigned int l = lMin; l < lMax; l++)
                 {
-                    command[l] = 10 * (ref_command[l] - encodersUsed[l]);
+                    command[l] = K * (ref_command[l] - encodersUsed[l]);
                     if (command[j_idx] > vMax) command[j_idx] = vMax;
                     if (command[j_idx] < -vMax) command[j_idx] = -vMax;
                 }
@@ -694,10 +1002,57 @@ bool    motorBabbling::startBabbling()
         }
     }
 
+//    startBabblingTime = yarp::os::Time::now();
     yDebug("[%s] ============> babbling with COMMAND will START",name.c_str());
     yInfo() << "AMP " << amp << "FREQ " << freq;
 
     isBabbling = true;
+
+    return true;
+}
+
+bool    motorBabbling::init_head()
+{
+    Property option_head;
+
+    string portnameHead = "head";  // part;
+    option_head.put("robot", robot.c_str());
+    option_head.put("device", "remote_controlboard");
+    Value &robotnameHead = option_head.find("robot");
+
+    option_head.put("local", "/" +name + "/" + robotnameHead.asString() + "/" + portnameHead + "/control");
+    option_head.put("remote", "/" + robotnameHead.asString() + "/" + portnameHead);
+
+    yDebug() << "option head: " << option_head.toString().c_str();
+
+    if (!headDev.open(option_head)) {
+        yError() << "Device not available. Here are the known devices:";
+        yError() << yarp::dev::Drivers::factory().toString();
+        return false;
+    }
+
+    headDev.view(posHead);
+    headDev.view(encsHead);
+    headDev.view(iCtrlHead);
+    headDev.view(iCtrlLimHead);
+
+    if (posHead == nullptr || encsHead == nullptr || iCtrlHead == nullptr || encsHead == nullptr)
+    {
+        yError() << "Cannot get interface to robot device for left arm";
+        headDev.close();
+        return false;
+    }
+
+    int nj_head = 0;
+    posHead->getAxes(&nj_head);
+    encodersHead.resize(nj_head);
+
+    yInfo() << "Wait for head encoders";
+    while (!encsHead->getEncoders(encodersHead.data()))
+    {
+        Time::delay(0.1);
+        yInfo() << "Wait for arm encoders";
+    }
 
     return true;
 }
@@ -789,6 +1144,8 @@ bool    motorBabbling::init_right_arm()
     rightArmDev.view(iCtrlRightArm);
     rightArmDev.view(iCtrlLimRightArm);
 
+//    double minLimArm[16];
+//    double maxLimArm[16];
     for (int l = 0; l < 16; l++)
         iCtrlLimRightArm->getLimits(l, &minLimArm[l], &maxLimArm[l]);
 
@@ -818,3 +1175,189 @@ bool    motorBabbling::init_right_arm()
     return true;
 }
 
+void motorBabbling::createStaticSphere(const double& radius, const Vector &pos, const string &color) //pos in sim FoR
+{
+    Bottle cmd;
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("mk");
+    cmd.addString("ssph");
+    cmd.addDouble(radius);
+
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+    // color
+    if (color=="red")
+    {
+        cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);  //red
+    }
+    else if (color == "green")
+    {
+        cmd.addInt(0);cmd.addInt(1);cmd.addInt(0);  //green
+    }
+    else if (color == "blue")
+    {
+        cmd.addInt(0);cmd.addInt(0);cmd.addInt(1);  //blue
+    }
+    else if (color == "purple")
+    {
+        cmd.addInt(1);cmd.addInt(0);cmd.addInt(1);  //purple
+    }
+    else if (color == "yellow")
+    {
+        cmd.addInt(1);cmd.addInt(1);cmd.addInt(0);  //yellow
+    }
+    else if (color == "magenta")
+    {
+        cmd.addInt(0);cmd.addInt(1);cmd.addInt(1);  //magenta
+    }
+    else
+    {
+        cmd.addInt(0);cmd.addInt(0);cmd.addInt(1);  //blue
+    }
+
+    portToSimWorld.write(cmd);
+}
+
+void motorBabbling::createStaticBox(const Vector &dim, const Vector &pos, const string &color) //pos in sim FoR
+{
+    Bottle cmd;
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("mk");
+    cmd.addString("sbox");
+    cmd.addDouble(dim(0)); cmd.addDouble(dim(1)); cmd.addDouble(dim(2));
+
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+    // color
+    if (color=="red")
+    {
+        cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);  //red
+    }
+    else if (color == "green")
+    {
+        cmd.addInt(0);cmd.addInt(1);cmd.addInt(0);  //green
+    }
+    else if (color == "blue")
+    {
+        cmd.addInt(0);cmd.addInt(0);cmd.addInt(1);  //blue
+    }
+    else if (color == "purple")
+    {
+        cmd.addInt(1);cmd.addInt(0);cmd.addInt(1);  //purple
+    }
+    else if (color == "yellow")
+    {
+        cmd.addInt(1);cmd.addInt(1);cmd.addInt(0);  //yellow
+    }
+    else if (color == "magenta")
+    {
+        cmd.addInt(0);cmd.addInt(1);cmd.addInt(1);  //magenta
+    }
+    else
+    {
+        cmd.addInt(0);cmd.addInt(0);cmd.addInt(1);  //blue
+    }
+
+    portToSimWorld.write(cmd);
+}
+
+void motorBabbling::cleanWorld()
+{
+    Bottle cmd;
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("del");
+    cmd.addString("all");
+    portToSimWorld.write(cmd);
+}
+
+bool motorBabbling::generateObjRandom(const string &side, Vector &pos)  //pos in sim FoR
+{
+    if (pos.size()==3)
+    {
+        // random vector position in world frame
+        pos[0] = 0.05 + 0.17*genRandom();   // x= 0.05 -> 0.22 (left)
+        pos[1] = 0.65 + 0.25*genRandom();   // y= 0.6 -> 0.85
+        pos[2] = 0.13 + 0.25*genRandom();   // z=.13 -> .38 ~ x=-.13 -> -.38 (robot)
+
+        if (pos[0]>0.2)
+            pos[2] = min(0.35,pos[2]);
+
+        if (pos[2]>0.35)
+            pos[0] = min(0.2,pos[0]);
+
+        if (side=="right")
+            pos[0] = -pos[0];   // due to x-axis in sim FoR points to left
+
+        if (pos[2]<.2)
+            pos[1] = max(0.7,pos[1]);
+
+        yDebug("[generateObjRandom] pos=%s", pos.toString(3,3).c_str());
+
+        // random color
+        unsigned int colorCode = (unsigned int)(6.*genRandom());
+        string color = objectColor[colorCode];
+
+        Bottle& output = objPoseDimOutPort.prepare();
+        output.clear();
+        Vector objDim(3,0.0);
+
+        // random dimension: depending on shape
+        double shape = genRandom();
+
+        if (shape<0.5) // sphere
+        {
+            double radius = 0.02 + 0.04*genRandom();
+            createStaticSphere(radius, pos, color);
+            for (int i=0; i<3; i++)
+                objDim[i] = radius;
+        }
+        else
+        {
+            Vector dim(3,0.0);
+            for (int8_t i=0; i<3; i++)
+                dim[i] = 0.03 + 0.09*genRandom();
+            createStaticBox(dim,pos, color);
+            for (int i=0; i<3; i++)
+                objDim[i] = dim[i];
+        }
+
+        // TODO: convert pos to robot frame
+        Vector temp(3);
+        convertPosFromSimToRootFoR(pos, temp);
+        pos = temp;
+
+
+        addVectorToBottle(pos,output);
+        addVectorToBottle(objDim,output);
+        objPoseDimOutPort.setEnvelope(ts);
+        objPoseDimOutPort.write();
+
+        return true;
+    }
+    else
+        return false;
+}
+
+void motorBabbling::convertPosFromSimToRootFoR(const Vector &pos, Vector &outPos)
+{
+    Vector pos_temp = pos;
+    pos_temp.resize(4);
+    pos_temp(3) = 1.0;
+
+    outPos.resize(4,0.0);
+    outPos = T_root_world * pos_temp;
+
+    outPos.resize(3);
+    return;
+}
+
+void motorBabbling::addVectorToBottle(const Vector &vec, Bottle &b)
+{
+    for (int8_t i=0; i<vec.size(); i++)
+        b.addDouble(vec[i]);
+}

@@ -8,8 +8,6 @@ set(PROJECTNAME motorBabbling)
 project(${PROJECTNAME})
 aux_source_directory(. SRC_LIST)
 
-include(YarpIDL)
-
 set (include_files	${CMAKE_CURRENT_SOURCE_DIR}/motorBabbling.h)
 
 set (source_files 	${CMAKE_CURRENT_SOURCE_DIR}/motorBabbling.cpp

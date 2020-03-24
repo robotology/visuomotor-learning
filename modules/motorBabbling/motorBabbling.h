@@ -33,6 +33,10 @@
 
 #include "motorBabbling_IDL.h"
 
+#define IDLE_MODE   0
+#define OBJ_MODE    1
+#define MOV_MODE    2
+
 class motorBabbling : public yarp::os::RFModule, public motorBabbling_IDL
 {
 protected:
@@ -59,6 +63,19 @@ protected:
     yarp::dev::IControlMode*        iCtrlRightArm;
     yarp::dev::IControlLimits*      iCtrlLimRightArm;
 
+    yarp::dev::IPositionControl*    posTorso;
+    yarp::dev::IVelocityControl*    velTorso;
+    yarp::dev::ITorqueControl*      itrqTorso;
+    yarp::dev::IEncoders*           encsTorso;
+    yarp::dev::IControlMode*        iCtrlTorso;
+    yarp::dev::IControlLimits*      iCtrlLimTorso;
+
+    yarp::dev::PolyDriver           torsoDev;
+    yarp::dev::IPositionControl*    posHead;
+    yarp::dev::IEncoders*           encsHead;
+    yarp::dev::IControlMode*        iCtrlHead;
+    yarp::dev::IControlLimits*      iCtrlLimHead;
+
     yarp::dev::IGazeControl*        igaze;
 
     yarp::dev::ICartesianControl   *iCartCtrlL;
@@ -68,12 +85,15 @@ protected:
     yarp::dev::PolyDriver           leftArmDev;
     yarp::dev::PolyDriver           rightArmDev;
     yarp::dev::PolyDriver           headDev;
+    yarp::sig::Vector               encodersTorso;
 
+    yarp::dev::PolyDriver           headCartDev;
     yarp::dev::PolyDriver           leftCartDev;
     yarp::dev::PolyDriver           rightCartDev;
 
-    yarp::sig::Vector               encodersLeftArm, encodersRightArm;
+    yarp::sig::Vector               encodersLeftArm, encodersRightArm, encodersHead;
     yarp::os::BufferedPort<yarp::os::Bottle>    eePoseOutPort;             //!< buffered port of dumped End-effector pose output
+    yarp::os::BufferedPort<yarp::os::Bottle>    objPoseDimOutPort;             //!< buffered port of dumpedobject  pose output
     yarp::os::Stamp                 ts;
 
 
@@ -96,6 +116,26 @@ protected:
 
     yarp::sig::Vector               fixatePos;  //!< fixate position of iCub eye, which is use to calculate the start position of hand
 
+    int32_t     nbRepeatObjGen;     //!< Number of generate new object
+    int32_t     curRepeatObjGen;
+    bool        babbling_with_obj;  //!< Flag for babbling-with-object mode, defaul is False
+    bool        generateObjRandom_only; //!< Flag for to generate random object only, without babbling, defaul is False
+
+    int         operation_mode;
+
+    yarp::os::Port                  portToSimWorld;
+    yarp::sig::Matrix               T_root_world;
+    yarp::sig::Vector               genObjPos;
+
+    yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelRgb>>     *imagePortInR;  //!< port for reading images
+    yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelRgb>>     *imagePortInL;  //!< port for reading images
+    yarp::os::Port                                                      imagePortOutR;  //!< port for streaming images
+    yarp::os::Port                                                      imagePortOutL;  //!< port for streaming images
+    yarp::sig::ImageOf<yarp::sig::PixelRgb>                             *imageInR;      //!< image from right cam
+    yarp::sig::ImageOf<yarp::sig::PixelRgb>                             *imageInL;      //!< image from left cam
+
+    yarp::os::BufferedPort<yarp::os::Bottle>                            headEncPortOut; //!< Port for streaming head encoder values
+
     int32_t     nbRepeat;           //!< Number of babbling time for 1 arm, set by auto_babbling_arm
     int32_t     curRepeat;          //!< Counter for auto_babbling_arm
     std::string autoArmName;        //!< Name of arm in auto babbling mode
@@ -110,6 +150,7 @@ protected:
     double              minLimArm[16];
     double              maxLimArm[16];
 
+    bool    init_head();
     bool    initArm(const std::string &part, yarp::dev::PolyDriver &armDev);
     bool    init_left_arm(); //!< Create PolyDriver for left arm
     bool    init_right_arm(); //!< Create PolyDriver for left arm
@@ -117,11 +158,37 @@ protected:
     bool    moveHeadToStartPos(bool ranPos);
     bool    moveHeadRandomly();
     bool    moveHeadToCentralPos();
+    bool    moveTorsoToHome();
     bool    moveArmToStartPos(const std::string &partName, bool home);
     bool    moveArmAway(const std::string &partName);
     bool    gotoStartPos(bool moveAway);
     void    babblingCommands(const double &t, int j_idx);
     bool    startBabbling();
+
+    void    createStaticSphere(const double& radius, const yarp::sig::Vector& pos, const std::string& color);
+    void    createStaticBox(const yarp::sig::Vector& dim, const yarp::sig::Vector& pos, const std::string& color);
+    void    cleanWorld();
+
+    void    addVectorToBottle(const yarp::sig::Vector& vec, yarp::os::Bottle& b);
+
+    /**
+     * @brief generateObjRandom
+     * @param side side: left/right should get autoArmName
+     * @param pos random position of generated object
+     * @return true if ok, false otherwise
+     */
+    bool    generateObjRandom(const std::string& side, yarp::sig::Vector& pos);
+
+    void    convertPosFromSimToRootFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
+
+    std::map<unsigned int, std::string> objectColor {
+        {0, "red"},
+        {1, "green"},
+        {2, "blue"},
+        {3, "purple"},
+        {4, "yellow"},
+        {5, "magenta"},
+    };
 
 public:
     bool    configure(yarp::os::ResourceFinder &rf);
@@ -142,6 +209,7 @@ public:
             nbRepeat = _nbRepeat;
             curRepeat = 0;
             autoArmName = armName;
+            operation_mode = MOV_MODE;
             return true;
         }
         else
@@ -157,6 +225,7 @@ public:
             part = armName;
             startBabbling();
             return true;
+            operation_mode = MOV_MODE;
         }
         else
             return false;
@@ -171,6 +240,7 @@ public:
             curRepeat = 0;
             autoArmName = armName;
             moveHeadOnly = true;
+            operation_mode = MOV_MODE;
             return true;
         }
         else
@@ -190,6 +260,7 @@ public:
                 yDebug("[%s] Failed moving all arms away!!",name.c_str());
             isBabbling = true;
             moveHeadOnly = true;
+            operation_mode = MOV_MODE;
             return ok;
         }
         else
@@ -204,6 +275,7 @@ public:
             part_babbling = "hand";
             part = handName;
             startBabbling();
+            operation_mode = MOV_MODE;
             return true;
         }
         else
@@ -220,6 +292,7 @@ public:
                 part_babbling = "arm";
                 part = armName;
                 startBabbling();
+                operation_mode = MOV_MODE;
                 return true;
             }
             else
@@ -246,6 +319,7 @@ public:
         bool ok = false;
         ok = moveHeadToCentralPos();
         ok = ok & home_arms();
+        ok = ok & moveTorsoToHome();
         if (ok)
             yDebug("[%s] Moved all parts home sucessfully!!",name.c_str());
         else
@@ -299,6 +373,36 @@ public:
     double get_freq()
     {
         return freq;
+    }
+
+    bool auto_obj_babble_arm(const std::string &armName, const int32_t _nbRepeatObj, const int32_t _nbRepeat)
+    {
+        if(_nbRepeat > 0)
+        {
+//            moveHeadToStartPos(false);
+            yarp::os::Time::delay(0.5);
+            nbRepeat = _nbRepeat;
+            curRepeat = 0;
+            autoArmName = armName;
+
+            curRepeatObjGen = 0;
+            nbRepeatObjGen = _nbRepeatObj;
+            babbling_with_obj = true;
+            operation_mode = MOV_MODE;
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool auto_obj_only(const std::string &armName, const int32_t _nbRepeatObj)
+    {
+        operation_mode = OBJ_MODE;
+        generateObjRandom_only = true;
+        autoArmName = armName;
+//        curRepeatObjGen = 0;
+//        nbRepeatObjGen = _nbRepeatObj;
+        return true;
     }
 
     bool resume()
