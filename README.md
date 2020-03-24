@@ -15,6 +15,8 @@ to connect to `motorBabbling` command service. There, with `help` you can explor
 	```
 	auto_obj_babble_arm right 2 3 #right for the right-arm, 2 for 2 different objects, and 3 for 3 repeats for each object
 	```
+	
+- Abstracted skin events can be read from this port `/skinEventsAggregator/skin_events_aggreg:o`
 
 ## Related publications
 ```
