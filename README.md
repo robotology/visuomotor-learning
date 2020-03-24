@@ -30,14 +30,14 @@ with the integer number in `( )` represents the taxel number, e.g. `101`, `118` 
 
 ### The order of taxel are as follows:
 
-1. Forearm
-	a. Lower patch (16 taxels): 3 15 27 39 51 63 75 87 99 111 123 135 147 159 171 183 
-	b. Upper patch 
-	- (7 taxels - icubSim) : 207 255 291 303 315 339 351
-	- (8 taxels - icub)    : 195 207 231 267 291 303 339 351
-2. Hand (the first 5 taxels are of fingers):
-	a. Left: 3 15 27 39 51 99 101 109 122 134
-	b. Right: 3 15 27 39 51 101 103 118 137 124
+1. Forearm  
+- Lower patch (16 taxels): 3 15 27 39 51 63 75 87 99 111 123 135 147 159 171 183   
+- Upper patch   
+	- (7 taxels - icubSim) : 207 255 291 303 315 339 351  
+	- (8 taxels - icub)    : 195 207 231 267 291 303 339 351  
+2. Hand (the first 5 taxels are of fingers):  
+- Left: 3 15 27 39 51 99 101 109 122 134  
+- Right: 3 15 27 39 51 101 103 118 137 124  
 
 
 ## Related publications
