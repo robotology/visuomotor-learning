@@ -39,6 +39,9 @@ with the integer number in `( )` represents the taxel number, e.g. `101`, `118` 
 - Left: 3 15 27 39 51 99 101 109 122 134  
 - Right: 3 15 27 39 51 101 103 118 137 124  
 
+## Some known bugs:
+- `iKinGazeCtrl` can hang and cause the `motorBablling` to fail: `killall -9 iKinGazeCtrl` and restart `motorBabbling`  
+- `iCub_SIM` may collapse after long run: stop and restart all modules  
 
 ## Related publications
 ```
