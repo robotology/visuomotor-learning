@@ -1,0 +1,126 @@
+<application>
+<name>Multisensory Integration Datadumper icubSim</name>
+<dependencies>
+</dependencies>
+    <!--Modules-->
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/head</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/torso</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/leftArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/rightArm</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/left --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+    <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/images/right --type image</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+
+     <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/taxels</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+     <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/eePose</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+     <module>
+        <name>yarpdatadumper</name>
+        <parameters>--name /data/reachingResults</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>yarpdatadumper</tag>
+    </module>
+
+    <!--Connections-->
+    <connection>
+        <from>/motorBabbling/headEncs:o</from>
+        <to>/data/head</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/torso/state:o</from>
+        <to>/data/torso</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/left_arm/state:o</from>
+        <to>/data/leftArm</to>
+        <protocol>udp</protocol>
+    </connection>
+    <connection>
+        <from>/icubSim/right_arm/state:o</from>
+        <to>/data/rightArm</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/motorBabbling/imageL:o</from>
+        <to>/data/images/left</to>
+        <protocol>fast_tcp</protocol>
+    </connection>
+    <connection>
+        <from>/motorBabbling/imageR:o</from>
+        <to>/data/images/right</to>
+        <protocol>fast_tcp</protocol>
+    </connection>
+
+    <connection>
+        <from>/skinEventsAggregator/skin_events_aggreg:o</from>
+        <to>/data/taxels</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/motorBabbling/eePose:o</from>
+        <to>/data/eePose</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/reachObjMultiDemo/targetDumpedData:o</from>
+        <to>/data/reachingResults</to>
+        <protocol>udp</protocol>
+    </connection>
+</application>

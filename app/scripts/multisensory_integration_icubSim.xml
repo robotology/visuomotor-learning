@@ -1,0 +1,240 @@
+<application>
+<name>Multisensory Integration icubSim</name>
+
+    <dependencies>
+    <port>/icubSim/left_arm/state:o</port>
+    <!--<port>/icubSim/right_arm/state:o</port>-->
+    </dependencies>
+
+    <module>
+        <name>iCub_SIM</name>
+        <node>localhost</node>
+        <tag>icubSim</tag>
+    </module>
+
+    <module>
+        <name>iCubGui</name>
+        <node>localhost</node>
+        <tag>iCubGui</tag>
+    </module>
+
+    <module>
+        <name>yarpmotorgui</name>
+        <node>localhost</node>
+        <tag>motorgui</tag>
+    </module>
+
+    <!--PPS modules-->
+    <module>
+        <name>skinEventsSampler</name>
+        <parameters>--name skinEventsAggregator</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>skinEventsAggreg</tag>
+    </module>
+
+    <!--skinGui modules-->
+    <module>
+        <name>iCubSkinGui</name>
+        <!-- Remember to use the proper configuration files (i.e. "_V2.ini" for V2 robots) -->
+        <parameters>--from left_forearm.ini --useCalibration --xpos 0 --ypos 0 --width 300 --height 300</parameters>
+        <node>localhost</node>
+        <tag>skinGuiLF</tag>
+    </module>
+    <module>
+        <name>iCubSkinGui</name>
+        <!-- Remember to use the proper configuration files (i.e. "_V2.ini" for V2 robots) -->
+        <parameters>--from left_hand_V2_1.ini --useCalibration --xpos 320 --ypos 0 --width 300 --height 300</parameters>
+        <node>localhost</node>
+        <tag>skinGuiLH</tag>
+    </module>
+    <module>
+        <name>iCubSkinGui</name>
+        <!-- Remember to use the proper configuration files (i.e. "_V2.ini" for V2 robots) -->
+        <parameters>--from right_forearm.ini --useCalibration --xpos 640 --ypos 0 --width 300 --height 300</parameters>
+        <node>localhost</node>
+        <tag>skinGuiRF</tag>
+    </module>
+    <module>
+        <name>iCubSkinGui</name>
+        <!-- Remember to use the proper configuration files (i.e. "_V2.ini" for V2 robots) -->
+        <!--<parameters>--from right_hand_V2_1.ini --useCalibration --xpos 960 --ypos 0 --width 300 --height 300</parameters>-->
+        <parameters>--from right_hand_V2_1.ini --useCalibration --xpos 941 --ypos 0 --width 300 --height 300</parameters>
+        <node>localhost</node>
+        <tag>skinGuiRH</tag>
+    </module>
+
+	<!--yarp view for images-->
+    <module>
+      	<name>yarpview</name>
+     	<!--<parameters>--name /icubSim/view/left --x 0 --y 0 --p 50</parameters>-->
+     	<parameters>--name /icubSim/view/left --x 640 --y 353 --p 50</parameters>
+      	<node>localhost</node>
+    </module>
+    <module>
+      	<name>yarpview</name>
+      	<!--<parameters>--name /icubSim/view/right --x 320 --y 0 --p 50</parameters>-->
+      	<parameters>--name /icubSim/view/right --x 941 --y 353 --p 50</parameters>
+      	<node>localhost</node>
+    </module>
+
+    <module>
+      	<name>yarpview</name>
+     	<parameters>--name /test/view/left --x 0 --y 320 --p 50</parameters>
+      	<node>localhost</node>
+    </module>
+    <module>
+      	<name>yarpview</name>
+      	<parameters>--name /test/view/right --x 320 --y 320 --p 50</parameters>
+      	<node>localhost</node>
+    </module>
+
+    <module>
+      	<name>motorBabbling</name>
+     	<parameters>--robot icubSim</parameters>
+      	<node>localhost</node>
+    </module>
+    <module>
+      	<name>reachObjMultiDemo</name>
+     	<parameters>--robot icubSim --part right_arm</parameters>
+      	<node>localhost</node>
+    </module>
+
+
+	<ensure>
+		<wait>5.0</wait>
+	</ensure>
+
+
+
+    <!--GUI connections-->
+    <connection>
+        <from>/guiUpdater/gui:o</from>
+        <to>/iCubGui/objects</to>
+        <protocol>tcp</protocol>
+    </connection>
+
+    <connection>
+        <from>/guiUpdater/guiBase:o</from>
+        <to>/iCubGui/base:i</to>
+        <protocol>tcp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/head/state:o</from>
+        <to>/iCubGui/head:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/inertial</from>
+        <to>/iCubGui/inertial:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/left_arm/state:o</from>
+        <to>/iCubGui/left_arm:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/right_arm/state:o</from>
+        <to>/iCubGui/right_arm:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/torso/state:o</from>
+        <to>/iCubGui/torso:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+	<!--Skin connections-->
+   	<connection>
+        <from>/icubSim/skinManager/skin_events:o</from>
+        <to>/visuoTactileRF/skin_events:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+      <from>/icubSim/skinManager/skin_events:o</from>
+      <to>/skinEventsAggregator/skin_events:i</to>
+      <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/skin/left_hand_comp</from>
+        <to>/skinGui/left_hand:i</to>
+        <protocol>udp</protocol>
+    </connection>
+    
+    <connection>
+        <from>/icubSim/skin/left_forearm_comp</from>
+        <to>/skinGui/left_forearm:i</to>
+        <protocol>udp</protocol>
+    </connection>  
+    
+    <connection>
+        <from>/icubSim/skin/left_arm_comp</from>
+        <to>/skinGui/left_arm:i</to>
+        <protocol>udp</protocol>
+    </connection>  
+
+    <connection>
+        <from>/icubSim/skin/right_hand_comp</from>
+        <to>/skinGui/right_hand:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/skin/right_forearm_comp</from>
+        <to>/skinGui/right_forearm:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/skin/right_arm_comp</from>
+        <to>/skinGui/right_arm:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+	<!--Camera connections-->	
+	<connection>
+  		<output>/icubSim/cam/left</output>
+  		<input>/icubSim/view/left</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+	<connection>
+  		<output>/icubSim/cam/right</output>
+  		<input>/icubSim/view/right</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+
+	<connection>
+  		<output>/icubSim/cam/left</output>
+  		<input>/motorBabbling/imageL:i</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+	<connection>
+  		<output>/icubSim/cam/right</output>
+  		<input>/motorBabbling/imageR:i</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+
+	<connection>
+  		<output>/motorBabbling/imageL:o</output>
+  		<input>/test/view/left</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+	<connection>
+  		<output>/motorBabbling/imageR:o</output>
+  		<input>/test/view/right</input>
+  		<protocol>fast_tcp</protocol>
+	</connection>
+
+
+
+</application>
+
+
