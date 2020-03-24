@@ -1,5 +1,5 @@
-# Copyright: (C) 2017 iCub Facility - Istituto Italiano di Tecnologia
-# Author: Nguyen Dong Hai Phuong <phuong.nguyen@iit.it>
+# Copyright: (C) 2019 iCub Facility - Istituto Italiano di Tecnologia
+# Author: Nguyen Dong Hai Phuong <pnguyen@informatik.uni-hamburg.de>
 # CopyPolicy: Released under the terms of the LGPLv2.1 or later, see LGPL.TXT
 
 cmake_minimum_required(VERSION 2.8)
